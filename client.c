@@ -17,6 +17,7 @@ int main(void)
     struct sockaddr_in saddr;
     int fd;
     char buf[BUFSIZE];
+    char response[BUFSIZE];
 
     /* make server's socket */
     if ((fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
@@ -47,6 +48,20 @@ int main(void)
         }
 
         send(fd, buf, strlen(buf), 0);
+        int ret = recv(fd, response, BUFSIZE, 0);
+
+        if (ret == 0)
+        {
+            break;
+        }
+
+        if (ret < 0)
+        {
+            perror("recv");
+            return -1;
+        }
+
+        write(1, response, ret);
     }
 
     close(fd);
