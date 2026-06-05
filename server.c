@@ -19,10 +19,18 @@ void recv_and_resp(int* fd_socket)
     char buf[BUFSIZE];
     fd = (int)*fd_socket;
 
-    if ((ret = recv(fd, buf, BUFSIZE, 0)) > 0)
+    for (;;)
     {
-        write(1, buf, ret);
+        if ((ret = recv(fd, buf, BUFSIZE, 0)) > 0)
+        {
+            if (ret == 0)
+            {
+                break;
+            }
+            write(1, buf, ret);
+        }
     }
+
     close(fd);
 }
 

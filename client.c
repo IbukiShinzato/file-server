@@ -10,12 +10,13 @@
 #include <unistd.h>
 
 #define PORTNUM 8000
+#define BUFSIZE 4096
 
 int main(void)
 {
     struct sockaddr_in saddr;
     int fd;
-    char* buf = "Hello, Socket Programming\n";
+    char buf[BUFSIZE];
 
     /* make server's socket */
     if ((fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
@@ -35,8 +36,20 @@ int main(void)
         exit(-1);
     }
 
-    send(fd, buf, strlen(buf), 0);
+    for (;;)
+    {
+        fputs("> ", stdout);
+        fflush(stdout);
+
+        if (fgets(buf, BUFSIZE, stdin) == NULL)
+        {
+            break;
+        }
+
+        send(fd, buf, strlen(buf), 0);
+    }
 
     close(fd);
+
     return 0;
 }
