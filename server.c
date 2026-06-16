@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -94,6 +95,41 @@ void delete_file(int fd_socket, const char* file_name)
     write(fd_socket, "DELETED\n", 8);
 }
 
+void ls(int fd_socket)
+{
+    char response[BUFSIZE];
+    int pos = 0;
+
+    DIR* mydir;
+    struct dirent* myfile;
+
+    char* home = getenv("HOME");
+    mydir = opendir(home);
+
+    if (mydir == NULL)
+    {
+        write(fd_socket, "NOT PERMISSION\n", 15);
+        return;
+    }
+
+    memset(response, 0, BUFSIZE);
+    while ((myfile = readdir(mydir)) != NULL)
+    {
+        if (pos >= BUFSIZE - 1)
+        {
+            break;
+        }
+        snprintf(response + pos, BUFSIZE - pos, "%s\n", myfile->d_name);
+        while (pos < BUFSIZE && response[pos] != '\0')
+        {
+            pos += 1;
+        }
+    }
+
+    write(fd_socket, response, pos);
+    closedir(mydir);
+}
+
 void* recv_and_resp(void* arg)
 {
     int ret;
@@ -120,6 +156,12 @@ void* recv_and_resp(void* arg)
         {
             perror("recv");
             break;
+        }
+
+        if (ret == 3 && strncmp(buf, "LS\n", 3) == 0)
+        {
+            ls(fd);
+            continue;
         }
 
         if (ret < 6)
