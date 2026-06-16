@@ -48,11 +48,40 @@ void send_file(int fd_socket, const char* file_name)
     close(fd_file);
 }
 
+void create_file(int fd_socket, const char* file_name, const char* content, int n)
+{
+    char path[BUFSIZE];
+
+    char* home = getenv("HOME");
+    snprintf(path, BUFSIZE, "%s/%s", home, file_name);
+    int fd_file = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+
+    if (fd_file < 0)
+    {
+        write(fd_socket, "NOT PERMISSION\n", 15);
+        return;
+    }
+
+    int ret = write(fd_file, content, n);
+
+    if (ret < 0)
+    {
+        close(fd_file);
+        write(fd_socket, "NOT PERMISSION\n", 15);
+        return;
+    }
+
+    write(fd_socket, "CREATED\n", 8);
+
+    close(fd_file);
+}
+
 void* recv_and_resp(void* arg)
 {
     int ret;
     char buf[BUFSIZE];
     char file_name[BUFSIZE];
+    char content[BUFSIZE];
     int fd = *(int*)arg;
     free(arg);
 
@@ -60,6 +89,7 @@ void* recv_and_resp(void* arg)
     {
         memset(buf, 0, BUFSIZE);
         memset(file_name, 0, BUFSIZE);
+        memset(content, 0, BUFSIZE);
 
         ret = recv(fd, buf, BUFSIZE, 0);
 
@@ -84,6 +114,26 @@ void* recv_and_resp(void* arg)
             int file_name_len = (ret - 3) - 4 + 1;
             memcpy(file_name, buf + 4, file_name_len);
             send_file(fd, file_name);
+        }
+
+        if (strncmp(buf, "PUT<", 4) == 0 && buf[ret - 2] == '>' && buf[ret - 1] == '\n')
+        {
+            int i = 0;
+            while (i < ret && buf[i] != '>')
+            {
+                i++;
+            }
+            int file_name_len = i - 4;
+            memcpy(file_name, buf + 4, file_name_len);
+            int content_start = i + 2;
+            if (buf[i + 1] != '<')
+            {
+                fprintf(stderr, "invalid request\n");
+                continue;
+            }
+            int content_len = (ret - 2) - content_start;
+            memcpy(content, buf + content_start, content_len);
+            create_file(fd, file_name, content, content_len);
         }
     }
 
