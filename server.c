@@ -76,6 +76,24 @@ void create_file(int fd_socket, const char* file_name, const char* content, int 
     close(fd_file);
 }
 
+void delete_file(int fd_socket, const char* file_name)
+{
+    char path[BUFSIZE];
+
+    char* home = getenv("HOME");
+    snprintf(path, BUFSIZE, "%s/%s", home, file_name);
+
+    int ret = unlink(path);
+
+    if (ret < 0)
+    {
+        write(fd_socket, "NOT FOUND\n", 10);
+        return;
+    }
+
+    write(fd_socket, "DELETED\n", 8);
+}
+
 void* recv_and_resp(void* arg)
 {
     int ret;
@@ -106,6 +124,7 @@ void* recv_and_resp(void* arg)
 
         if (ret < 6)
         {
+            write(fd, "INVALID REQUEST\n", 16);
             continue;
         }
 
@@ -115,8 +134,7 @@ void* recv_and_resp(void* arg)
             memcpy(file_name, buf + 4, file_name_len);
             send_file(fd, file_name);
         }
-
-        if (strncmp(buf, "PUT<", 4) == 0 && buf[ret - 2] == '>' && buf[ret - 1] == '\n')
+        else if (strncmp(buf, "PUT<", 4) == 0 && buf[ret - 2] == '>' && buf[ret - 1] == '\n')
         {
             int i = 0;
             while (i < ret && buf[i] != '>')
@@ -128,12 +146,23 @@ void* recv_and_resp(void* arg)
             int content_start = i + 2;
             if (buf[i + 1] != '<')
             {
-                fprintf(stderr, "invalid request\n");
+                write(fd, "INVALID REQUEST\n", 16);
                 continue;
             }
             int content_len = (ret - 2) - content_start;
             memcpy(content, buf + content_start, content_len);
             create_file(fd, file_name, content, content_len);
+        }
+        else if (strncmp(buf, "DEL<", 4) == 0 && buf[ret - 2] == '>' && buf[ret - 1] == '\n')
+        {
+            int file_name_len = (ret - 3) - 4 + 1;
+            memcpy(file_name, buf + 4, file_name_len);
+            delete_file(fd, file_name);
+        }
+        else
+        {
+            write(fd, "INVALID REQUEST\n", 16);
+            continue;
         }
     }
 
@@ -182,17 +211,18 @@ int main(void)
         }
 
         int* arg_fd = malloc(sizeof(int));
-        *arg_fd = fd2;
-
         if (arg_fd == NULL)
         {
             perror("malloc");
             return -1;
         }
+        *arg_fd = fd2;
 
-        if (pthread_create(&pt, NULL, recv_and_resp, arg_fd) < 0)
+        if (pthread_create(&pt, NULL, recv_and_resp, arg_fd) != 0)
         {
             perror("pthread_create");
+            free(arg_fd);
+            close(fd2);
             return -1;
         }
         pthread_detach(pt);
